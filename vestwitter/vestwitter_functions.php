@@ -119,23 +119,13 @@ function vestwitter_check_plugin_status(){
 	}else{
 		$success[] = "Json decode esta disponible!";
 	}
-	if(!check_curl_avaliable()){
-		$errors[] = "Es necessari tindre <a href=\"http://php.net/manual/en/book.curl.php\" target=\"_blank\">cURL</a> instal·lat, contacta amb el teu administrador per a activar-lo!";
+	
+	$userInfo = valid_twitter_user();
+		
+	if($userInfo["errCode"]!="0"){
+		$errors[] = "El usuari de twitter proveït no es valid, el missatge de resposta es : " . $userInfo["message"];
 	}else{
-		$success[] = "Curl instal·lat i configurat!";
-		if(!check_curl_call()){
-			$errors[] = "Curl no aconsegueix fer crides externes, esta correctament configurat?";
-		}else{
-			$success[] = "Curl ha aconseguit fer crides externes!";
-		}
-		
-		$userInfo = valid_twitter_user();
-		
-		if($userInfo["errCode"]!="0"){
-			$errors[] = "El usuari de twitter proveït no es valid, el missatge de resposta es : " . $userInfo["message"];
-		}else{
-			$success[] = "Usuari i contrassenya de twitter correctes!";
-		}
+		$success[] = "Usuari i contrassenya de twitter correctes!";
 	}
 	return array("success"=>$success,"errors"=>$errors);
 }
@@ -148,40 +138,57 @@ function json_decode_avaliable(){
 }
 
 /**
- * comprova si curl pot fer crides a l'exterior
- */
-function check_curl_call(){
-	$user = get_option("usuari_twitter");
-	$data = twitter_call("statuses/user_timeline",array('screen_name'=>$user));
-	return !empty($data);
-}
-
-/**
  * fa una crida a twitter a traves de curl
  */
 function twitter_call($call,$params=array(),$http_method='get'){	
 	$format = "json";
 	$api_call = sprintf('http://twitter.com/%s.%s', $call, $format);
 	$username = get_option("usuari_twitter");
-	$password = get_option("contrassenya_twitter").'wrong!';
+	$password = get_option("contrassenya_twitter");
 	
-    count( $params ) > 0 ? $api_call .= '?' . http_build_query($params) : false;
-	$ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $api_call);
-    curl_setopt($ch, CURLOPT_VERBOSE, 1);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array('Expect:'));
-
-    curl_setopt($ch, CURLOPT_USERPWD, "$username:$password");
-    curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-    curl_setopt($ch, CURLOPT_POST, $http_method=='post'?1:0);
+	 var_dump($params);
 	
-	//$headers = curl_getinfo($ch);
+	$headers = array( 'Authorization' => 'Basic '.base64_encode("$username:$password"), 
+		'X-Twitter-Client'=>'WP to Twitter',
+		'X-Twitter-Client-Version' => VESTWITTER_VERSION, 
+		'X-Twitter-Client-URL' => VESTWITTER_XMLDEF_URL
+	);
 	
-	$twitter_data = curl_exec($ch);
-	curl_close($ch);
-	return $twitter_data;
+	$http = new WP_Http;
+	$result = $http->request( $api_call , array( 'method'=>$http_method, 'body'=>$params, 'headers'=>$headers, 'user-agent'=>'WPVesTwitter http://ves.cat/sobre.html' ) );
+	// Success?
+	if ( !is_wp_error($result) && isset($result['body']) ) {
+		return $result;
+	// Failure (server problem...)
+	} else {
+		return false;
+	}
 }
+
+/**
+ * $twit = urldecode( $twit );
+		$body =    array( 'status'=>$twit, 'source'=>'wptotwitter' );
+		$headers = array( 'Authorization' => 'Basic '.base64_encode("$thisuser:$thispass"), 
+			'X-Twitter-Client'=>'WP to Twitter',
+			'X-Twitter-Client-Version' => $version, 
+			'X-Twitter-Client-URL' => 'http://www.joedolson.com/scripts/wp-to-twitter.xml'
+		);
+ */
+
+/**
+ * $request = new WP_Http;
+	$result = $request->request( $url , array( 'method'=>$method, 'body'=>$body, 'headers'=>$headers, 'user-agent'=>'WP to Twitter http://www.joedolson.com/articles/wp-to-twitter/' ) );
+	// Success?
+	if ( !is_wp_error($result) && isset($result['body']) ) {
+		if ($return == 'body') {
+		return $result['body'];
+		} else {
+		return $result;
+		}
+	// Failure (server problem...)
+	} else {
+		return false;
+	} */
 
 /**
  * funcio de l'API de twitter per a actualitzar el estatus
@@ -189,6 +196,13 @@ function twitter_call($call,$params=array(),$http_method='get'){
 function twitter_call_update_status($message){
 	$data = twitter_call("statuses/update",array('status'=>$message),'post');
 	return $data;
+}
+
+function does_twitter_is_down(){
+	$data = twitter_call("help/test");
+	var_dump($data);
+	$jsdata = json_decode($data);
+	var_dump($jsdata);
 }
 
 /** 
@@ -210,7 +224,7 @@ function valid_php_version(){
  */
 function valid_twitter_user(){
 	$data = twitter_call("account/verify_credentials");
-	if(empty($data))return array("mesage"=>'cUrl no funciona!',"errCode"=>'0');
+	if(empty($data))return array("mesage"=>'No s\'han pogut sol·licitar les credencials!',"errCode"=>'0');
 	$jsdata = json_decode($data);
 	if( in_array( "errors", array_keys( get_object_vars( $jsdata ) ) ) ){
 		$msg = $jsdata->errors[0]->message;
@@ -229,24 +243,20 @@ function check_curl_avaliable() {
 	return function_exists('curl_init');
 }
 
+/**
+ * escurça l'enllaç per mitja de ves.cat
+ */
 function vescat_shorten_link($link){
-	$vescat_call = sprintf('http://localhost/vescat/?url=%s&format=json',urlencode($link));
-	$ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $vescat_call);
-    curl_setopt($ch, CURLOPT_VERBOSE, 1);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array('Expect:'));
-
-    curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-    curl_setopt($ch, CURLOPT_POST, 0);
-	
-	$vescat_data = curl_exec($ch);
-	curl_close($ch);
-	
-	return $vescat_data;
+	$query = '?'.http_build_query(array('url'=>urlencode($link),'format'=>'json'));
+	$vescat_call = 'http://localhost/vescat/'.$query;
+	$http = new WP_Http;
+	$return = $http->request( $vescat_call , array( 'method'=>'GET', 'user-agent'=>'WPVesTwitter http://ves.cat/sobre.html' ) );
+	if( !is_wp_error($return) && $return['body'] ){
+		return $return['body'];
+	}else{
+		return false;	
+	}
 }
-
-global $test;
 
 function vestwitter_send_new_to_twitter($postID){
 	$missatges = get_option('missatges');
@@ -290,15 +300,15 @@ function vestwitter_send_edit_to_twitter($postID){
 	
 }
 
-function vestwitter_show_error($ref){
-	wp_die($ref);
-}
-
 function sandbox(){
+	//$test = vescat_shorten_link('http://www.google.com/q=pepepepe');
+	//var_dump($test);
+	does_twitter_is_down();
+	$status = 'Probando de definir el user agent a traves de api ( guan mor taim... )';
+	$twitter_data = twitter_call_update_status($status);
+	var_dump($twitter_data);
 	/*var_dump(json_decode(vescat_shorten_link('http://ves.cat/api.html')));
 	//var_dump(query_posts("ID=1"));
-	$status = 'Probando a ver que devuelve twitter al hacer un update del status a traves de cUrl!';
-	$twitter_data = twitter_call_update_status($status);
 	$js_result = json_decode($twitter_data);
 	if( !in_array( "errors", array_keys( get_object_vars( $js_result ) ) ) && $js_result->text === $status ){
 			vestwitter_show_message('Missatge envïat amb exit!');
