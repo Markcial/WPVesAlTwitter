@@ -237,7 +237,7 @@ function check_curl_avaliable() {
  */
 function vescat_shorten_link($link){
 	$query = '?'.http_build_query(array('url'=>urlencode($link),'format'=>'json'));
-	$vescat_call = 'http://localhost/vescat/'.$query;
+	$vescat_call = 'http://ves.cat/'.$query;
 	$http = new WP_Http;
 	$return = $http->request( $vescat_call , array( 'method'=>'GET', 'user-agent'=>'WPVesTwitter http://ves.cat/sobre.html' ) );
 	if( !is_wp_error($return) && $return['body'] ){

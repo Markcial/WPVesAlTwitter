@@ -24,10 +24,6 @@ Author URI: http://blog.illcode4food.com
     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-ini_set('display_errors','true');
-error_reporting(E_ALL);
-
-
 if(!defined('DS'))define('DS',DIRECTORY_SEPARATOR);
 if(!defined('WP_VERSION'))define('WP_VERSION',$wp_version);
 if(!defined('VESTWITTER_VERSION'))define('VESTWITTER_VERSION','0.1a');
