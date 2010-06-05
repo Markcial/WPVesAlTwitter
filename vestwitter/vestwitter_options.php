@@ -3,12 +3,12 @@
 <script type="text/javascript">
 /*<![CDATA[*/
 jQuery(document).ready(function(){
-	if( jQuery("#quan_enviar").val() != 2 )jQuery("#tmpl_post_editat").attr("disabled","disabled");
+	if( jQuery("#quan_enviar").val() != 2 )jQuery("#tmpl_post_editat").attr("readonly","readonly");
 	jQuery("#quan_enviar").bind("change",function(){
 		if( jQuery(this).val() == 2 ){
-			jQuery("#tmpl_post_editat").removeAttr("disabled");
+			jQuery("#tmpl_post_editat").removeAttr("readonly");
 		}else{
-			jQuery("#tmpl_post_editat").attr("disabled","disabled");
+			jQuery("#tmpl_post_editat").attr("readonly","readonly");
 		} 
 	})
 })

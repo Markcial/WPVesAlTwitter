@@ -31,11 +31,8 @@ add_action( 'pending_to_publish', 'vestwitter_send_new_to_twitter' );
 add_action( 'future_to_publish', 'vestwitter_send_new_to_twitter' );
 
 // enviament de l'adreça al editar un post
-//add_action( 'modify_post',  'vestwitter_send_edit_to_twitter');
+add_action( 'edit_to_publish',  'vestwitter_send_edit_to_twitter');
 
 // afegint el css de la seccio admin
 add_action( 'admin_head', 'vestwitter_admin_css');
-
-// proves
-add_action('admin_init','sandbox');
 ?>

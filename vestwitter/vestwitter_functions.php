@@ -59,7 +59,7 @@ function vestwitter_conf() {
 		update_option("contrassenya_twitter",$ptwitter);
 		update_option("quan_enviar",$qenviar);
 		update_option("tmpl_nou_post",$tmpl_nou_post);
-		update_option("tmpl_post_editat",$tmpl_post_editat);
+		!empty($tmpl_post_editat)?update_option("tmpl_post_editat",$tmpl_post_editat):false;
 	}else{
 		if (!current_user_can('manage_options'))  {
 			wp_die( __('You do not have sufficient permissions to access this page.') );
@@ -71,6 +71,9 @@ function vestwitter_conf() {
 	}
 }
 
+/**
+ * Mostra resposta de l'status del complement
+ */
 function vestwitter_plugin_status(){
 	echo '<div id="vestwitter_notices" class="updated"><p><strong>Tests!</strong>';
 	
@@ -120,13 +123,20 @@ function vestwitter_check_plugin_status(){
 		$success[] = "Json decode esta disponible!";
 	}
 	
-	$userInfo = valid_twitter_user();
-		
-	if($userInfo["errCode"]!="0"){
-		$errors[] = "El usuari de twitter proveït no es valid, el missatge de resposta es : " . $userInfo["message"];
+	if(!does_twitter_is_up()){
+		$errors[] = "Twitter no respon!";
 	}else{
-		$success[] = "Usuari i contrassenya de twitter correctes!";
+		$success[] = "Twitter està funcionant correctament!";
+		
+		$userInfo = valid_twitter_user();
+		
+		if($userInfo["errCode"]!="0"){
+			$errors[] = "El usuari de twitter proveït no es valid, el missatge de resposta es : " . $userInfo["message"];
+		}else{
+			$success[] = "Usuari i contrassenya de twitter correctes!";
+		}	
 	}
+	
 	return array("success"=>$success,"errors"=>$errors);
 }
 
@@ -146,8 +156,6 @@ function twitter_call($call,$params=array(),$http_method='get'){
 	$username = get_option("usuari_twitter");
 	$password = get_option("contrassenya_twitter");
 	
-	 var_dump($params);
-	
 	$headers = array( 'Authorization' => 'Basic '.base64_encode("$username:$password"), 
 		'X-Twitter-Client'=>'WP to Twitter',
 		'X-Twitter-Client-Version' => VESTWITTER_VERSION, 
@@ -158,37 +166,12 @@ function twitter_call($call,$params=array(),$http_method='get'){
 	$result = $http->request( $api_call , array( 'method'=>$http_method, 'body'=>$params, 'headers'=>$headers, 'user-agent'=>'WPVesTwitter http://ves.cat/sobre.html' ) );
 	// Success?
 	if ( !is_wp_error($result) && isset($result['body']) ) {
-		return $result;
+		return $result['body'];
 	// Failure (server problem...)
 	} else {
 		return false;
 	}
 }
-
-/**
- * $twit = urldecode( $twit );
-		$body =    array( 'status'=>$twit, 'source'=>'wptotwitter' );
-		$headers = array( 'Authorization' => 'Basic '.base64_encode("$thisuser:$thispass"), 
-			'X-Twitter-Client'=>'WP to Twitter',
-			'X-Twitter-Client-Version' => $version, 
-			'X-Twitter-Client-URL' => 'http://www.joedolson.com/scripts/wp-to-twitter.xml'
-		);
- */
-
-/**
- * $request = new WP_Http;
-	$result = $request->request( $url , array( 'method'=>$method, 'body'=>$body, 'headers'=>$headers, 'user-agent'=>'WP to Twitter http://www.joedolson.com/articles/wp-to-twitter/' ) );
-	// Success?
-	if ( !is_wp_error($result) && isset($result['body']) ) {
-		if ($return == 'body') {
-		return $result['body'];
-		} else {
-		return $result;
-		}
-	// Failure (server problem...)
-	} else {
-		return false;
-	} */
 
 /**
  * funcio de l'API de twitter per a actualitzar el estatus
@@ -198,11 +181,17 @@ function twitter_call_update_status($message){
 	return $data;
 }
 
-function does_twitter_is_down(){
+/**
+ * Comprova si twitter esta funcionant
+ */
+function does_twitter_is_up(){
 	$data = twitter_call("help/test");
-	var_dump($data);
-	$jsdata = json_decode($data);
-	var_dump($jsdata);
+	$result = (string)json_decode($data);
+	if(!empty($result) && $result == 'ok'){
+		return true;
+	}else{
+		return false;
+	}
 }
 
 /** 
@@ -258,6 +247,9 @@ function vescat_shorten_link($link){
 	}
 }
 
+/**
+ * Envia post del bloc al twitter
+ */
 function vestwitter_send_new_to_twitter($postID){
 	$missatges = get_option('missatges');
 	$link = get_permalink($postID);
@@ -282,6 +274,9 @@ function vestwitter_send_new_to_twitter($postID){
 	update_option('missatges',$missatges);
 }
 
+/**
+ * hook per mostrar missatges d'error o exit al dashboard de wordpress
+ */
 function vestwitter_messages(){
 	$missatges = get_option('missatges');
 	if(!empty($missatges)){
@@ -296,25 +291,34 @@ function vestwitter_messages(){
 	delete_option('missatges');
 }
 
+/**
+ * Envia el post a twitter al editar-lo si esta configurat a les opcions
+ */
 function vestwitter_send_edit_to_twitter($postID){
+	$quan_enviar = get_option('quan_enviar');
+	if( $quan_enviar == QUAN_NOU_O_CREA_POST ){
+		$missatges = get_option('missatges');
+		$link = get_permalink($postID);
+		$vescat_data = vescat_shorten_link($link);
+		$jsdata = json_decode($vescat_data);
+		if($jsdata && $jsdata->status == 'Ok' && false ){
+			$status = sprintf(get_option("tmpl_post_editat"),$jsdata->link); 
+			$twitter_data = twitter_call_update_status($status);
+			$js_result = json_decode($twitter_data);
+			if( !in_array( "errors", array_keys( get_object_vars( $js_result ) ) ) && $js_result->text === $status ){
+				$missatges[] = 'Missatge envïat a twitter amb exit!';
+			}else if( in_array( "errors", array_keys( get_object_vars( $js_result ) ) ) ){
+				$missatges[] = "No s'ha pogut enviar : ".$js_result->errors[0]->message; 
+			}
+		}else{
+			$error = 'Ves.cat no ha aconseguit escurçar l\'adreça web';
+			if($jsdata->status){
+				$error .= ' rao : '.$jsdata->status; 
+			}
+			$missatges[] = $error;
+		}
+	}
+	update_option('missatges',$missatges);
 	
-}
-
-function sandbox(){
-	//$test = vescat_shorten_link('http://www.google.com/q=pepepepe');
-	//var_dump($test);
-	does_twitter_is_down();
-	$status = 'Probando de definir el user agent a traves de api ( guan mor taim... )';
-	$twitter_data = twitter_call_update_status($status);
-	var_dump($twitter_data);
-	/*var_dump(json_decode(vescat_shorten_link('http://ves.cat/api.html')));
-	//var_dump(query_posts("ID=1"));
-	$js_result = json_decode($twitter_data);
-	if( !in_array( "errors", array_keys( get_object_vars( $js_result ) ) ) && $js_result->text === $status ){
-			vestwitter_show_message('Missatge envïat amb exit!');
-		}else if( in_array( "errors", array_keys( get_object_vars( $js_result ) ) ) ){
-			vestwitter_show_message( " No s'ha pogut enviar, raó : ".$js_result->errors[0]->message);
-		}*/
-		//var_dump($_POST);
 }
 ?>
